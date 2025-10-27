@@ -40,10 +40,16 @@ class QueryRequest(BaseModel):
     query: str
     session_id: Optional[str] = None
 
+class SourceData(BaseModel):
+    """Source data model with structured course/lesson information"""
+    title: str
+    course: str
+    lesson: Optional[int] = None
+
 class QueryResponse(BaseModel):
     """Response model for course queries"""
     answer: str
-    sources: List[str]
+    sources: List[SourceData]
     session_id: str
 
 class CourseStats(BaseModel):
@@ -61,13 +67,30 @@ async def query_documents(request: QueryRequest):
         session_id = request.session_id
         if not session_id:
             session_id = rag_system.session_manager.create_session()
-        
+
         # Process query using RAG system
         answer, sources = rag_system.query(request.query, session_id)
-        
+
+        # Convert sources to SourceData objects if they're dictionaries
+        source_data_list = []
+        for source in sources:
+            if isinstance(source, dict):
+                source_data_list.append(SourceData(
+                    title=source.get('title', source.get('course', '')),
+                    course=source.get('course', ''),
+                    lesson=source.get('lesson')
+                ))
+            else:
+                # Fallback for string sources
+                source_data_list.append(SourceData(
+                    title=str(source),
+                    course=str(source),
+                    lesson=None
+                ))
+
         return QueryResponse(
             answer=answer,
-            sources=sources,
+            sources=source_data_list,
             session_id=session_id
         )
     except Exception as e:

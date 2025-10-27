@@ -115,26 +115,74 @@ function addMessage(content, type, sources = null, isWelcome = false) {
     const messageDiv = document.createElement('div');
     messageDiv.className = `message ${type}${isWelcome ? ' welcome-message' : ''}`;
     messageDiv.id = `message-${messageId}`;
-    
+
     // Convert markdown to HTML for assistant messages
     const displayContent = type === 'assistant' ? marked.parse(content) : escapeHtml(content);
-    
+
     let html = `<div class="message-content">${displayContent}</div>`;
-    
+
+    // Process sources - handle both object and string formats
     if (sources && sources.length > 0) {
-        html += `
-            <details class="sources-collapsible">
-                <summary class="sources-header">Sources</summary>
-                <div class="sources-content">${sources.join(', ')}</div>
-            </details>
-        `;
+        const sourcesHtml = sources.map(source => {
+            // Handle both object and string source formats for backwards compatibility
+            if (typeof source === 'object' && source.course) {
+                const courseEscaped = escapeJs(source.course);
+                const lessonValue = source.lesson || 'null';
+                return `
+                    <div class="source-item">
+                        <a href="#" class="source-link" onclick="event.preventDefault(); navigateToSource('${courseEscaped}', ${lessonValue})">
+                            ${escapeHtml(source.title || source.course)}
+                        </a>
+                    </div>
+                `;
+            } else if (typeof source === 'string') {
+                // Legacy string format - create a safe link
+                const sourceEscaped = escapeJs(source);
+                return `
+                    <div class="source-item">
+                        <a href="#" class="source-link" onclick="event.preventDefault(); navigateToSource('${sourceEscaped}', null)">
+                            ${escapeHtml(source)}
+                        </a>
+                    </div>
+                `;
+            }
+            return '';
+        }).join('');
+
+        if (sourcesHtml) {
+            html += `
+                <details class="sources-collapsible">
+                    <summary class="sources-header">📚 Sources</summary>
+                    <div class="sources-content">
+                        ${sourcesHtml}
+                    </div>
+                </details>
+            `;
+        }
     }
-    
+
     messageDiv.innerHTML = html;
     chatMessages.appendChild(messageDiv);
     chatMessages.scrollTop = chatMessages.scrollHeight;
-    
+
     return messageId;
+}
+
+// Helper function to escape special characters in JavaScript strings
+function escapeJs(str) {
+    if (!str) return '';
+    return String(str).replace(/'/g, "\\'").replace(/"/g, '\\"').replace(/\n/g, '\\n');
+}
+
+// Navigate to a source by populating the search with a query
+function navigateToSource(courseName, lessonNumber) {
+    let query = `Tell me more about "${courseName}"`;
+    if (lessonNumber) {
+        query = `What's covered in lesson ${lessonNumber} of "${courseName}"?`;
+    }
+    chatInput.value = query;
+    chatInput.focus();
+    sendMessage();
 }
 
 // Helper function to escape HTML for user messages
